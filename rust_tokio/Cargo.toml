@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-futures = "0.3.31"
-tokio = { version = "1.41.1", features = ["full"] }
+tokio = { version = "1", features = ["macros", "time", "rt"] }
 
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = "symbols"
