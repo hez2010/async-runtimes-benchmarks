@@ -4,7 +4,7 @@ Did you still remember [the memory consumption comparison](https://pkolaczk.gith
 
 Now at the end of 2024, I wonder how things changed in the span of one year, with the latest version of languages.
 
-So I did the benchmark again in [How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?](/take1.html)
+So I did the benchmark again in [How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?](https://hez2010.github.io/async-runtimes-benchmarks-2024)
 
 Then some folks pointed out that the code for some languages were non-optimal, so after taking changes from the community, I ran the benchmark again.
 
