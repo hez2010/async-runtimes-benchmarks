@@ -1,10 +1,14 @@
-# How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?
+# How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks? - Take 2
 
 Did you still remember [the memory consumption comparison](https://pkolaczk.github.io/memory-consumption-of-async/) between asynchronous programming across popular languages in 2023?
 
 Now at the end of 2024, I wonder how things changed in the span of one year, with the latest version of languages.
 
-Let's do the benchmark again and see the results!
+So I did the benchmark again in [How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?](/take1.html)
+
+Then some folks pointed out that the code for some languages were non-optimal, so after taking changes from the community, I ran the benchmark again.
+
+Now let's see the result.
 
 ## Benchmark
 
@@ -22,47 +26,64 @@ What is a coroutine?
 
 ### Rust
 
-I created 2 programs in Rust. One uses `tokio`:
+I created 3 programs in Rust. One uses `tokio`:
 
 ```rust
 use std::env;
-use tokio::time::{sleep, Duration};
+use tokio::{spawn, time::{sleep, Duration}};
 
 #[tokio::main]
 async fn main() {
-    let args: Vec<String> = env::args().collect();
-    let num_tasks = args[1].parse::<i32>().unwrap();
-    let mut tasks = Vec::new();
+    let num_tasks = env::args().skip(1).next().unwrap().parse().unwrap();
+
+    let mut tasks = Vec::with_capacity(num_tasks);
     for _ in 0..num_tasks {
-        tasks.push(sleep(Duration::from_secs(10)));
+        tasks.push(spawn(sleep(Duration::from_secs(10))));
     }
-    futures::future::join_all(tasks).await;
+    for task in tasks {
+        task.await.unwrap();
+    }
 }
 ```
 
-while another one uses `async_std`:
+One uses `async_std`:
 
 ```rust
 use std::env;
 use async_std::task;
-use futures::future::join_all;
 use std::time::Duration;
 
 #[async_std::main]
 async fn main() {
-    let args: Vec<String> = env::args().collect();
-    let num_tasks = args[1].parse::<usize>().unwrap();
-    
-    let mut tasks = Vec::new();
+    let num_tasks = env::args().skip(1).next().unwrap().parse().unwrap();
+
+    let mut tasks = Vec::with_capacity(num_tasks);
     for _ in 0..num_tasks {
-        tasks.push(task::sleep(Duration::from_secs(10)));
+        tasks.push(task::spawn(task::sleep(Duration::from_secs(10))));
     }
 
-    join_all(tasks).await;
+    for task in tasks {
+        task.await;
+    }
 }
 ```
 
-Both are popular async runtime commonly used in Rust.
+And one uses `tokio` but uses `futures::future::join_all` to track all tasks instead of `spawn` each task separately:
+
+```rust
+use std::env;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    let num_tasks = env::args().skip(1).next().unwrap().parse().unwrap();
+
+    futures::future::join_all((0..num_tasks).map(|_| tokio::time::sleep(Duration::from_secs(10))))
+        .await;
+}
+```
+
+Both `tokio` and `async_std` are popular async runtime commonly used in Rust.
 
 ### C#
 
@@ -70,7 +91,8 @@ C#, similar to Rust, has first-class support for async/await:
 
 ```csharp
 int numTasks = int.Parse(args[0]);
-List<Task> tasks = new List<Task>();
+
+List<Task> tasks = new List<Task>(numTasks);
 
 for (int i = 0; i < numTasks; i++)
 {
@@ -134,24 +156,31 @@ In Go, goroutines are the building block for concurrency. We don’t await them 
 package main
 
 import (
-    "fmt"
-    "os"
-    "strconv"
-    "sync"
-    "time"
+	"fmt"
+	"os"
+	"strconv"
+	"sync"
+	"time"
 )
 
 func main() {
-    numRoutines, _ := strconv.Atoi(os.Args[1])
-    var wg sync.WaitGroup
-    for i := 0; i < numRoutines; i++ {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            time.Sleep(10 * time.Second)
-        }()
-    }
-    wg.Wait()
+	numRoutines := 100000
+	if len(os.Args) > 1 {
+		n, err := strconv.Atoi(os.Args[1])
+		if err == nil {
+			numRoutines = n
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < numRoutines; i++ {
+		wg.Add(1)
+		go func() {
+			time.Sleep(10 * time.Second)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 ```
 
@@ -168,7 +197,7 @@ public class VirtualThreads {
 
     public static void main(String[] args) throws InterruptedException {
 	    int numTasks = Integer.parseInt(args[0]);
-        List<Thread> threads = new ArrayList<>();
+        List<Thread> threads = new ArrayList<>(numTasks);
 
         for (int i = 0; i < numTasks; i++) {
             Thread thread = Thread.startVirtualThread(() -> {
@@ -215,263 +244,131 @@ All programs were launched using the release mode if available, and support for 
 Let's start from something small, because some runtimes require some memory for themselves, let's first launch only one task.
 
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-minimum">
+  <canvas id="cvs-0">
   </canvas>
 </div>
-
 <script>
-  const ctx1 = document.getElementById('mem-minimum');
-
-  new Chart(ctx1, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [4968, 5384, 25008, 3924, 3644, 46304, 111464, 8552, 43320, 20536],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx0 = document.getElementById('cvs-0');
+    new Chart(ctx0, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [4.71875, 5.1484375, 3.03515625, 24.359375, 3.58984375, 3.5546875, 46.91015625, 112.421875, 8.265625, 41.9296875, 19.515625] },
+                { label: 'CPU (%)', data: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+                { label: 'Time (Sec)', data: [10, 10, 10, 10.01, 10, 10, 10.03, 10.11, 10, 10.05, 10.09] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
+
+**Note: You can click the legend label on the top to hide a specific legend.**
 
 We can see that Rust, C# (NativeAOT), and Go achieved similar results, as they were compiled statically to native binaries and needed very little memory. Java (GraalVM native-image) also did a great job but cost a bit more than the other statically compiled ones. The other programs running on managed platforms or through interpreters consume more memory.
 
-Go seems to have the smallest footprint in this case.
+Rust (futures) seems to have the smallest footprint in this case. While Go and C# (NativeAOT) seem to have the similar minimal footprint.
+
+Python, which is running on an interpreter, also shows great result.
 
 Java with GraalVM is a bit surprising, as it cost far more memory than Java with OpenJDK, but I guess this can be tuned with some settings.
 
 ### 10K Tasks
 
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-10k">
+  <canvas id="cvs-1">
   </canvas>
 </div>
-
 <script>
-  const ctx2 = document.getElementById('mem-10k');
-
-  new Chart(ctx2, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [8232, 5912, 29208, 10172, 32752, 111444, 198548, 27616, 66920, 34260],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx1 = document.getElementById('cvs-1');
+    new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [9.03515625, 8.1015625, 4.78125, 28.1171875, 7.55859375, 34.29296875, 108.37109375, 181.8359375, 22.828125, 64.7890625, 33.34765625] },
+                { label: 'CPU (%)', data: [0, 0, 0, 0, 0, 0, 11, 6, 1, 0, 1] },
+                { label: 'Time (Sec)', data: [10, 10, 10, 10.02, 10, 10.01, 10.1, 10.08, 10.03, 10.02, 10.1] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
-A few surprises here! The two Rust benchmarks achieved very promising results: they both used very little memory, which didn't grow too much compared to minimal footprint results, even though there were 10K tasks running behind the scenes! C# (NativeAOT) followed closely behind, using only ~10MB of memory. We need more tasks to put more pressure on them!
 
-The memory consumption grew dramatically in Go. Goroutines are supposed to be very lightweight, but they actually consumed far more RAM than Rust required. In this case, virtual threads in Java (GraalVM native image) seem to be more lightweight than Goroutines in Go. To my surprise, both Go and Java (GraalVM native image), which were compiled to native binaries statically, cost more RAM than the C# one running on a VM!
+A few surprises here! The three Rust benchmarks, C# (NativeAOT) achieved very promising results: they both used very little memory (less than 10MB), which didn't grow too much compared to minimal footprint results, even though there were 10K tasks running behind the scenes! C# (NativeAOT) followed closely behind, using only ~10MB of memory. We need more tasks to put more pressure on them!
+
+The memory consumption grew dramatically in Go. Goroutines are supposed to be very lightweight, but they actually consumed far more RAM than Rust required. In this case, virtual threads in Java (GraalVM native image) seem to be more lightweight than Goroutines in Go. To my surprise, both Go and Java (GraalVM native image), which were compiled to native binaries statically, cost similar RAM with the C# one running on a VM!
 
 ### 100K Tasks
 
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-100k">
+  <canvas id="cvs-2">
   </canvas>
 </div>
-
 <script>
-  const ctx3 = document.getElementById('mem-100k');
-
-  new Chart(ctx3, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [37192, 32128, 52112, 31728, 270708, 199032, 496812, 105312, 131588, 150264],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx2 = document.getElementById('cvs-2');
+    new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [46.234375, 53.24609375, 22.7578125, 50.05078125, 30.02734375, 262.67578125, 196.96875, 419.01171875, 100.83984375, 125.06640625, 146.46875] },
+                { label: 'CPU (%)', data: [1, 1, 0, 2, 2, 5, 70, 54, 14, 1, 9] },
+                { label: 'Time (Sec)', data: [10.04, 10.03, 10.02, 10.07, 10, 10.09, 10.61, 10.25, 10.32, 10.06, 10.71] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
 
 After we increased the number of tasks to 100K, the memory consumption of all the languages started to grow significantly.
 
-Both Rust and C# did a really good job in this case. A big surprise is that C# (NativeAOT) even cost less RAM than Rust and beat all other languages. Really impressive!
+Both Rust and C# did a really good job in this case. Rust continues to lead the benchmark, and C# follows closely. Really impressive!
 
-At this point, the Go program has been beaten not only by Rust but also by Java (except the one running on GraalVM), C#, and NodeJS.
+At this point, the Go program has been beaten not only by Rust but also by Java (except the one running on GraalVM), C#, and NodeJS. But worth to note that Java costs significantly more CPU to complete the benchmark.
 
 ### 1 Million Tasks
 
 Let's go extreme now.
 
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-1m">
+  <canvas id="cvs-3">
   </canvas>
 </div>
-
 <script>
-  const ctx4 = document.getElementById('mem-1m');
-
-  new Chart(ctx4, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [326664, 302340, 223436, 203448, 2641592, 1117640, 1570300, 1070396, 584852, 1308136],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx3 = document.getElementById('cvs-3');
+    new Chart(ctx3, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [439.08984375, 502.25, 207.37890625, 218.38671875, 196.59375, 2585.5859375, 1095.1875, 1546.76171875, 1057.32421875, 563.88671875, 1275.71875] },
+                { label: 'CPU (%)', data: [17, 19, 7, 21, 27, 28, 452, 475, 117, 13, 67] },
+                { label: 'Time (Sec)', data: [10.41, 10.35, 10.3, 10.5, 10.58, 10.83, 15.98, 15.6, 13.41, 10.51, 19.36] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
 
-Finally, C# undoubtedly beat all other languages; it's very competitive and has really become a monster. And as expected, Rust continues to do a good job on memory efficiency. 
+Finally, Rust (futures) and C# show very promising result; either is very competitive and has really become a monster.
 
-The distance between Go and the others increased. Now Go loses by over 13 times to the winner. It also loses by over 2 times to Java, which contradicts the general perception of the JVM being a memory hog and Go being lightweight.
+And it's worth to note that Rust consistently cost the least CPU for running all the tasks.
+
+NodeJS, which runs on a VM, also shows great result in this case: although it costs more RAM than C#, it requires less CPU to complete the benchmark, which is even less than some of the Rust benchmarks.
+
+While both Java and Python start to be not able to complete the benchmark in 10 seconds, and Java costs significant more CPU than other languages.
 
 ## Final Word
 
 As we have observed, a high number of concurrent tasks can consume a significant amount of memory, even if they do not perform complex operations. Different language runtimes have varying trade-offs, with some being lightweight and efficient for a small number of tasks but scaling poorly with hundreds of thousands of tasks.
 
-Many things have changed since last year. With the benchmark results on the latest compilers and runtimes, we see a huge improvement in .NET, and .NET with NativeAOT is really competitive with Rust. The native image of Java built with GraalVM also did a great job in terms of memory efficiency. However, goroutines continue to be inefficient in resource consumption.
+Many things have changed since last year. With the benchmark results on the latest compilers and runtimes, we see a huge improvement in .NET, and .NET with NativeAOT is really competitive.
 
-## Appendix
+Rust continues to be memory saving as expected, and achieved similar result with C# (NativeAOT).
 
-Some folks pointed out that in Rust (tokio) it can use a loop iterating over the `Vec` instead of `join_all` to avoid the resize to the list introduced by `join_all`. So I added a new test case `Rust (tokio-for)` here:
+NodeJS shows impressive result in term of CPU usage.
 
-```rust
-use std::env;
-use tokio::time::{sleep, Duration};
+Python faced performance issue and was not able to complete the benchmark in time in the 1M case.
 
-#[tokio::main]
-async fn main() {
-    let args: Vec<String> = env::args().collect();
-    let num_tasks = args[1].parse::<i32>().unwrap();
-    let mut tasks = Vec::new();
-    for _ in 0..num_tasks {
-        tasks.push(sleep(Duration::from_secs(10)));
-    }
-    for task in tasks {
-        task.await;
-    }
-}
-```
-
-Note that this won't work for `async_std` as it needs you to poll explicitly until the task being scheduled and executed, so switching to a loop will make it run the tasks sequentially. 
-
-Let's see what will happen with the new test code.
-
-### Minimum Footprint
-
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-minimum-new">
-  </canvas>
-</div>
-
-<script>
-  const ctx1_new = document.getElementById('mem-minimum-new');
-
-  new Chart(ctx1_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [4968, 3228, 5384, 25008, 3924, 3644, 46304, 111464, 8552, 43320, 20536],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-
-### 10K Tasks
-
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-10k-new">
-  </canvas>
-</div>
-
-<script>
-  const ctx2_new = document.getElementById('mem-10k-new');
-
-  new Chart(ctx2_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [8232, 3924, 5912, 29208, 10172, 32752, 111444, 198548, 27616, 66920, 34260],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-
-### 100K Tasks
-
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-100k-new">
-  </canvas>
-</div>
-
-<script>
-  const ctx3_new = document.getElementById('mem-100k-new');
-
-  new Chart(ctx3_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [37192, 16800, 32128, 52112, 31728, 270708, 199032, 496812, 105312, 131588, 150264],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-
-### 1M Tasks
-
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-1m-new">
-  </canvas>
-</div>
-
-<script>
-  const ctx4_new = document.getElementById('mem-1m-new');
-
-  new Chart(ctx4_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [326664, 123716, 302340, 223436, 203448, 2641592, 1117640, 1570300, 1070396, 584852, 1308136],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-
-
-This shrinks the cost of `Rust (tokio)` by about a half, which makes Rust the absolute lead in this benchmark. Good job, Rust.
+Both Java Virtual Thread and Goroutine take similar approach on concurrency, while others are using async/await, so let's exclude other languages and only focus on these two: the native image of Java built with GraalVM did a great job in terms of memory efficiency, but it failed to finished the benchmark in 10 seconds in the 1M case; while Goroutine is able to complete all the tasks in time, but it costs much more RAM than Java in the 1M case. 
