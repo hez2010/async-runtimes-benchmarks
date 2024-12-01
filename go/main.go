@@ -26,5 +26,4 @@ func main() {
 		}()
 	}
 	wg.Wait()
-	fmt.Println("All goroutines finished.")
 }
