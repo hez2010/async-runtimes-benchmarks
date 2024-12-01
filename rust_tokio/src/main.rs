@@ -1,5 +1,5 @@
 use std::env;
-use tokio::time::{sleep, Duration};
+use tokio::{spawn, time::{sleep, Duration}};
 
 #[tokio::main]
 async fn main() {
@@ -7,7 +7,9 @@ async fn main() {
 
     let mut tasks = Vec::with_capacity(num_tasks);
     for _ in 0..num_tasks {
-        tasks.push(sleep(Duration::from_secs(10)));
+        tasks.push(spawn(sleep(Duration::from_secs(10))));
     }
-    futures::future::join_all(tasks).await;
+    for task in tasks {
+        task.await.unwrap();
+    }
 }
