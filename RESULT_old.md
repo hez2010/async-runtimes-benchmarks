@@ -1,5 +1,11 @@
 # How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?
 
+## A take 2 on this benchmark
+
+Please refer to [How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks? - Take 2](https://hez2010.github.io/async-runtimes-benchmarks-2024/take2.html) to see the latest result.
+
+# Old post
+
 Did you still remember [the memory consumption comparison](https://pkolaczk.github.io/memory-consumption-of-async/) between asynchronous programming across popular languages in 2023?
 
 Now at the end of 2024, I wonder how things changed in the span of one year, with the latest version of languages.
