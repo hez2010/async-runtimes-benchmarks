@@ -2,7 +2,7 @@
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks&quest;</title>
+            <title>How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks&quest; - Take 2</title>
             <style>
 /* From extension vscode.github */
 /*---------------------------------------------------------------------------------------------
@@ -211,10 +211,12 @@ body.marp-vscode blockquote {
         
         </head>
         <body class="vscode-body vscode-light">
-            <h1 id="how-much-memory-do-you-need-in-2024-to-run-1-million-concurrent-tasks">How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?</h1>
+            <h1 id="how-much-memory-do-you-need-in-2024-to-run-1-million-concurrent-tasks---take-2">How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks? - Take 2</h1>
 <p>Did you still remember <a href="https://pkolaczk.github.io/memory-consumption-of-async/">the memory consumption comparison</a> between asynchronous programming across popular languages in 2023?</p>
 <p>Now at the end of 2024, I wonder how things changed in the span of one year, with the latest version of languages.</p>
-<p>Let's do the benchmark again and see the results!</p>
+<p>So I did the benchmark again in <a href="/take1.html">How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks?</a></p>
+<p>Then some folks pointed out that the code for some languages were non-optimal, so after taking changes from the community, I ran the benchmark again.</p>
+<p>Now let's see the result.</p>
 <h2 id="benchmark">Benchmark</h2>
 <p>The program to benchmark is the same with the one in the last year:</p>
 <blockquote>
@@ -227,45 +229,60 @@ body.marp-vscode blockquote {
 <p>Coroutines are computer program components that allow execution to be suspended and resumed, generalizing subroutines for cooperative multitasking. Coroutines are well-suited for implementing familiar program components such as cooperative tasks, exceptions, event loops, iterators, infinite lists and pipes.</p>
 </blockquote>
 <h3 id="rust">Rust</h3>
-<p>I created 2 programs in Rust. One uses <code>tokio</code>:</p>
+<p>I created 3 programs in Rust. One uses <code>tokio</code>:</p>
 <pre><code class="language-rust"><span class="hljs-keyword">use</span> std::env;
-<span class="hljs-keyword">use</span> tokio::time::{sleep, Duration};
+<span class="hljs-keyword">use</span> tokio::{spawn, time::{sleep, Duration}};
 
 <span class="hljs-meta">#[tokio::main]</span>
 <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() {
-    <span class="hljs-keyword">let</span> <span class="hljs-variable">args</span>: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">String</span>&gt; = env::<span class="hljs-title function_ invoke__">args</span>().<span class="hljs-title function_ invoke__">collect</span>();
-    <span class="hljs-keyword">let</span> <span class="hljs-variable">num_tasks</span> = args[<span class="hljs-number">1</span>].parse::&lt;<span class="hljs-type">i32</span>&gt;().<span class="hljs-title function_ invoke__">unwrap</span>();
-    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">tasks</span> = Vec::<span class="hljs-title function_ invoke__">new</span>();
+    <span class="hljs-keyword">let</span> <span class="hljs-variable">num_tasks</span> = env::<span class="hljs-title function_ invoke__">args</span>().<span class="hljs-title function_ invoke__">skip</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">next</span>().<span class="hljs-title function_ invoke__">unwrap</span>().<span class="hljs-title function_ invoke__">parse</span>().<span class="hljs-title function_ invoke__">unwrap</span>();
+
+    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">tasks</span> = Vec::<span class="hljs-title function_ invoke__">with_capacity</span>(num_tasks);
     <span class="hljs-keyword">for</span> <span class="hljs-variable">_</span> <span class="hljs-keyword">in</span> <span class="hljs-number">0</span>..num_tasks {
-        tasks.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">10</span>)));
+        tasks.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">10</span>))));
     }
-    futures::future::<span class="hljs-title function_ invoke__">join_all</span>(tasks).<span class="hljs-keyword">await</span>;
+    <span class="hljs-keyword">for</span> <span class="hljs-variable">task</span> <span class="hljs-keyword">in</span> tasks {
+        task.<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>();
+    }
 }
 </code></pre>
-<p>while another one uses <code>async_std</code>:</p>
+<p>One uses <code>async_std</code>:</p>
 <pre><code class="language-rust"><span class="hljs-keyword">use</span> std::env;
 <span class="hljs-keyword">use</span> async_std::task;
-<span class="hljs-keyword">use</span> futures::future::join_all;
 <span class="hljs-keyword">use</span> std::time::Duration;
 
 <span class="hljs-meta">#[async_std::main]</span>
 <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() {
-    <span class="hljs-keyword">let</span> <span class="hljs-variable">args</span>: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">String</span>&gt; = env::<span class="hljs-title function_ invoke__">args</span>().<span class="hljs-title function_ invoke__">collect</span>();
-    <span class="hljs-keyword">let</span> <span class="hljs-variable">num_tasks</span> = args[<span class="hljs-number">1</span>].parse::&lt;<span class="hljs-type">usize</span>&gt;().<span class="hljs-title function_ invoke__">unwrap</span>();
-    
-    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">tasks</span> = Vec::<span class="hljs-title function_ invoke__">new</span>();
+    <span class="hljs-keyword">let</span> <span class="hljs-variable">num_tasks</span> = env::<span class="hljs-title function_ invoke__">args</span>().<span class="hljs-title function_ invoke__">skip</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">next</span>().<span class="hljs-title function_ invoke__">unwrap</span>().<span class="hljs-title function_ invoke__">parse</span>().<span class="hljs-title function_ invoke__">unwrap</span>();
+
+    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">tasks</span> = Vec::<span class="hljs-title function_ invoke__">with_capacity</span>(num_tasks);
     <span class="hljs-keyword">for</span> <span class="hljs-variable">_</span> <span class="hljs-keyword">in</span> <span class="hljs-number">0</span>..num_tasks {
-        tasks.<span class="hljs-title function_ invoke__">push</span>(task::<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">10</span>)));
+        tasks.<span class="hljs-title function_ invoke__">push</span>(task::<span class="hljs-title function_ invoke__">spawn</span>(task::<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">10</span>))));
     }
 
-    <span class="hljs-title function_ invoke__">join_all</span>(tasks).<span class="hljs-keyword">await</span>;
+    <span class="hljs-keyword">for</span> <span class="hljs-variable">task</span> <span class="hljs-keyword">in</span> tasks {
+        task.<span class="hljs-keyword">await</span>;
+    }
 }
 </code></pre>
-<p>Both are popular async runtime commonly used in Rust.</p>
+<p>And one uses <code>tokio</code> but uses <code>futures::future::join_all</code> to track all tasks instead of <code>spawn</code> each task separately:</p>
+<pre><code class="language-rust"><span class="hljs-keyword">use</span> std::env;
+<span class="hljs-keyword">use</span> std::time::Duration;
+
+<span class="hljs-meta">#[tokio::main]</span>
+<span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() {
+    <span class="hljs-keyword">let</span> <span class="hljs-variable">num_tasks</span> = env::<span class="hljs-title function_ invoke__">args</span>().<span class="hljs-title function_ invoke__">skip</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">next</span>().<span class="hljs-title function_ invoke__">unwrap</span>().<span class="hljs-title function_ invoke__">parse</span>().<span class="hljs-title function_ invoke__">unwrap</span>();
+
+    futures::future::<span class="hljs-title function_ invoke__">join_all</span>((<span class="hljs-number">0</span>..num_tasks).<span class="hljs-title function_ invoke__">map</span>(|_| tokio::time::<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">10</span>))))
+        .<span class="hljs-keyword">await</span>;
+}
+</code></pre>
+<p>Both <code>tokio</code> and <code>async_std</code> are popular async runtime commonly used in Rust.</p>
 <h3 id="c">C#</h3>
 <p>C#, similar to Rust, has first-class support for async/await:</p>
 <pre><code class="language-csharp"><span class="hljs-built_in">int</span> numTasks = <span class="hljs-built_in">int</span>.Parse(args[<span class="hljs-number">0</span>]);
-List&lt;Task&gt; tasks = <span class="hljs-keyword">new</span> List&lt;Task&gt;();
+
+List&lt;Task&gt; tasks = <span class="hljs-keyword">new</span> List&lt;Task&gt;(numTasks);
 
 <span class="hljs-keyword">for</span> (<span class="hljs-built_in">int</span> i = <span class="hljs-number">0</span>; i &lt; numTasks; i++)
 {
@@ -315,24 +332,31 @@ List&lt;Task&gt; tasks = <span class="hljs-keyword">new</span> List&lt;Task&gt;(
 <pre><code class="language-go"><span class="hljs-keyword">package</span> main
 
 <span class="hljs-keyword">import</span> (
-    <span class="hljs-string">&quot;fmt&quot;</span>
-    <span class="hljs-string">&quot;os&quot;</span>
-    <span class="hljs-string">&quot;strconv&quot;</span>
-    <span class="hljs-string">&quot;sync&quot;</span>
-    <span class="hljs-string">&quot;time&quot;</span>
+	<span class="hljs-string">&quot;fmt&quot;</span>
+	<span class="hljs-string">&quot;os&quot;</span>
+	<span class="hljs-string">&quot;strconv&quot;</span>
+	<span class="hljs-string">&quot;sync&quot;</span>
+	<span class="hljs-string">&quot;time&quot;</span>
 )
 
 <span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> {
-    numRoutines, _ := strconv.Atoi(os.Args[<span class="hljs-number">1</span>])
-    <span class="hljs-keyword">var</span> wg sync.WaitGroup
-    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; numRoutines; i++ {
-        wg.Add(<span class="hljs-number">1</span>)
-        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> {
-            <span class="hljs-keyword">defer</span> wg.Done()
-            time.Sleep(<span class="hljs-number">10</span> * time.Second)
-        }()
-    }
-    wg.Wait()
+	numRoutines := <span class="hljs-number">100000</span>
+	<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(os.Args) &gt; <span class="hljs-number">1</span> {
+		n, err := strconv.Atoi(os.Args[<span class="hljs-number">1</span>])
+		<span class="hljs-keyword">if</span> err == <span class="hljs-literal">nil</span> {
+			numRoutines = n
+		}
+	}
+
+	<span class="hljs-keyword">var</span> wg sync.WaitGroup
+	<span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; numRoutines; i++ {
+		wg.Add(<span class="hljs-number">1</span>)
+		<span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> {
+			time.Sleep(<span class="hljs-number">10</span> * time.Second)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 </code></pre>
 <h3 id="java">Java</h3>
@@ -345,7 +369,7 @@ List&lt;Task&gt; tasks = <span class="hljs-keyword">new</span> List&lt;Task&gt;(
 
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> InterruptedException {
 	    <span class="hljs-type">int</span> <span class="hljs-variable">numTasks</span> <span class="hljs-operator">=</span> Integer.parseInt(args[<span class="hljs-number">0</span>]);
-        List&lt;Thread&gt; threads = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;();
+        List&lt;Thread&gt; threads = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;(numTasks);
 
         <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; numTasks; i++) {
             <span class="hljs-type">Thread</span> <span class="hljs-variable">thread</span> <span class="hljs-operator">=</span> Thread.startVirtualThread(() -&gt; {
@@ -385,223 +409,106 @@ List&lt;Task&gt; tasks = <span class="hljs-keyword">new</span> List&lt;Task&gt;(
 <h3 id="minimum-footprint">Minimum Footprint</h3>
 <p>Let's start from something small, because some runtimes require some memory for themselves, let's first launch only one task.</p>
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-minimum">
+  <canvas id="cvs-0">
   </canvas>
 </div>
 <script>
-  const ctx1 = document.getElementById('mem-minimum');
-
-  new Chart(ctx1, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [4968, 5384, 25008, 3924, 3644, 46304, 111464, 8552, 43320, 20536],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx0 = document.getElementById('cvs-0');
+    new Chart(ctx0, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [4.71875, 5.1484375, 3.03515625, 24.359375, 3.58984375, 3.5546875, 46.91015625, 112.421875, 8.265625, 41.9296875, 19.515625] },
+                { label: 'CPU (%)', data: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+                { label: 'Time (Sec)', data: [10, 10, 10, 10.01, 10, 10, 10.03, 10.11, 10, 10.05, 10.09] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
+<p><strong>Note: You can click the legend label on the top to hide a specific legend.</strong></p>
 <p>We can see that Rust, C# (NativeAOT), and Go achieved similar results, as they were compiled statically to native binaries and needed very little memory. Java (GraalVM native-image) also did a great job but cost a bit more than the other statically compiled ones. The other programs running on managed platforms or through interpreters consume more memory.</p>
-<p>Go seems to have the smallest footprint in this case.</p>
+<p>Rust (futures) seems to have the smallest footprint in this case. While Go and C# (NativeAOT) seem to have the similar minimal footprint.</p>
+<p>Python, which is running on an interpreter, also shows great result.</p>
 <p>Java with GraalVM is a bit surprising, as it cost far more memory than Java with OpenJDK, but I guess this can be tuned with some settings.</p>
 <h3 id="10k-tasks">10K Tasks</h3>
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-10k">
+  <canvas id="cvs-1">
   </canvas>
 </div>
 <script>
-  const ctx2 = document.getElementById('mem-10k');
-
-  new Chart(ctx2, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [8232, 5912, 29208, 10172, 32752, 111444, 198548, 27616, 66920, 34260],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx1 = document.getElementById('cvs-1');
+    new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [9.03515625, 8.1015625, 4.78125, 28.1171875, 7.55859375, 34.29296875, 108.37109375, 181.8359375, 22.828125, 64.7890625, 33.34765625] },
+                { label: 'CPU (%)', data: [0, 0, 0, 0, 0, 0, 11, 6, 1, 0, 1] },
+                { label: 'Time (Sec)', data: [10, 10, 10, 10.02, 10, 10.01, 10.1, 10.08, 10.03, 10.02, 10.1] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
-<p>A few surprises here! The two Rust benchmarks achieved very promising results: they both used very little memory, which didn't grow too much compared to minimal footprint results, even though there were 10K tasks running behind the scenes! C# (NativeAOT) followed closely behind, using only ~10MB of memory. We need more tasks to put more pressure on them!</p>
-<p>The memory consumption grew dramatically in Go. Goroutines are supposed to be very lightweight, but they actually consumed far more RAM than Rust required. In this case, virtual threads in Java (GraalVM native image) seem to be more lightweight than Goroutines in Go. To my surprise, both Go and Java (GraalVM native image), which were compiled to native binaries statically, cost more RAM than the C# one running on a VM!</p>
+<p>A few surprises here! The three Rust benchmarks, C# (NativeAOT) achieved very promising results: they both used very little memory (less than 10MB), which didn't grow too much compared to minimal footprint results, even though there were 10K tasks running behind the scenes! C# (NativeAOT) followed closely behind, using only ~10MB of memory. We need more tasks to put more pressure on them!</p>
+<p>The memory consumption grew dramatically in Go. Goroutines are supposed to be very lightweight, but they actually consumed far more RAM than Rust required. In this case, virtual threads in Java (GraalVM native image) seem to be more lightweight than Goroutines in Go. To my surprise, both Go and Java (GraalVM native image), which were compiled to native binaries statically, cost similar RAM with the C# one running on a VM!</p>
 <h3 id="100k-tasks">100K Tasks</h3>
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-100k">
+  <canvas id="cvs-2">
   </canvas>
 </div>
 <script>
-  const ctx3 = document.getElementById('mem-100k');
-
-  new Chart(ctx3, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [37192, 32128, 52112, 31728, 270708, 199032, 496812, 105312, 131588, 150264],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx2 = document.getElementById('cvs-2');
+    new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [46.234375, 53.24609375, 22.7578125, 50.05078125, 30.02734375, 262.67578125, 196.96875, 419.01171875, 100.83984375, 125.06640625, 146.46875] },
+                { label: 'CPU (%)', data: [1, 1, 0, 2, 2, 5, 70, 54, 14, 1, 9] },
+                { label: 'Time (Sec)', data: [10.04, 10.03, 10.02, 10.07, 10, 10.09, 10.61, 10.25, 10.32, 10.06, 10.71] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
 <p>After we increased the number of tasks to 100K, the memory consumption of all the languages started to grow significantly.</p>
-<p>Both Rust and C# did a really good job in this case. A big surprise is that C# (NativeAOT) even cost less RAM than Rust and beat all other languages. Really impressive!</p>
-<p>At this point, the Go program has been beaten not only by Rust but also by Java (except the one running on GraalVM), C#, and NodeJS.</p>
+<p>Both Rust and C# did a really good job in this case. Rust continues to lead the benchmark, and C# follows closely. Really impressive!</p>
+<p>At this point, the Go program has been beaten not only by Rust but also by Java (except the one running on GraalVM), C#, and NodeJS. But worth to note that Java costs significantly more CPU to complete the benchmark.</p>
 <h3 id="1-million-tasks">1 Million Tasks</h3>
 <p>Let's go extreme now.</p>
 <div style="height:40vh; width:80vw">
-  <canvas id="mem-1m">
+  <canvas id="cvs-3">
   </canvas>
 </div>
 <script>
-  const ctx4 = document.getElementById('mem-1m');
-
-  new Chart(ctx4, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [326664, 302340, 223436, 203448, 2641592, 1117640, 1570300, 1070396, 584852, 1308136],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
+    const ctx3 = document.getElementById('cvs-3');
+    new Chart(ctx3, {
+        type: 'bar',
+        data: {
+            labels: ['Rust (tokio)', 'Rust (async_std)', 'Rust (futures)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
+            datasets: [
+                { label: 'Memory (MB)', data: [439.08984375, 502.25, 207.37890625, 218.38671875, 196.59375, 2585.5859375, 1095.1875, 1546.76171875, 1057.32421875, 563.88671875, 1275.71875] },
+                { label: 'CPU (%)', data: [17, 19, 7, 21, 27, 28, 452, 475, 117, 13, 67] },
+                { label: 'Time (Sec)', data: [10.41, 10.35, 10.3, 10.5, 10.58, 10.83, 15.98, 15.6, 13.41, 10.51, 19.36] },
+            ]
+        },
+        options: { indexAxis: 'y' }
+    });
 </script>
-<p>Finally, C# undoubtedly beat all other languages; it's very competitive and has really become a monster. And as expected, Rust continues to do a good job on memory efficiency.</p>
-<p>The distance between Go and the others increased. Now Go loses by over 13 times to the winner. It also loses by over 2 times to Java, which contradicts the general perception of the JVM being a memory hog and Go being lightweight.</p>
+<p>Finally, Rust (futures) and C# show very promising result; either is very competitive and has really become a monster.</p>
+<p>And it's worth to note that Rust consistently cost the least CPU for running all the tasks.</p>
+<p>NodeJS, which runs on a VM, also shows great result in this case: although it costs more RAM than C#, it requires less CPU to complete the benchmark, which is even less than some of the Rust benchmarks.</p>
+<p>While both Java and Python start to be not able to complete the benchmark in 10 seconds, and Java costs significant more CPU than other languages.</p>
 <h2 id="final-word">Final Word</h2>
 <p>As we have observed, a high number of concurrent tasks can consume a significant amount of memory, even if they do not perform complex operations. Different language runtimes have varying trade-offs, with some being lightweight and efficient for a small number of tasks but scaling poorly with hundreds of thousands of tasks.</p>
-<p>Many things have changed since last year. With the benchmark results on the latest compilers and runtimes, we see a huge improvement in .NET, and .NET with NativeAOT is really competitive with Rust. The native image of Java built with GraalVM also did a great job in terms of memory efficiency. However, goroutines continue to be inefficient in resource consumption.</p>
-<h2 id="appendix">Appendix</h2>
-<p>Some folks pointed out that in Rust (tokio) it can use a loop iterating over the <code>Vec</code> instead of <code>join_all</code> to avoid the resize to the list introduced by <code>join_all</code>. So I added a new test case <code>Rust (tokio-for)</code> here:</p>
-<pre><code class="language-rust"><span class="hljs-keyword">use</span> std::env;
-<span class="hljs-keyword">use</span> tokio::time::{sleep, Duration};
-
-<span class="hljs-meta">#[tokio::main]</span>
-<span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() {
-    <span class="hljs-keyword">let</span> <span class="hljs-variable">args</span>: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">String</span>&gt; = env::<span class="hljs-title function_ invoke__">args</span>().<span class="hljs-title function_ invoke__">collect</span>();
-    <span class="hljs-keyword">let</span> <span class="hljs-variable">num_tasks</span> = args[<span class="hljs-number">1</span>].parse::&lt;<span class="hljs-type">i32</span>&gt;().<span class="hljs-title function_ invoke__">unwrap</span>();
-    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">tasks</span> = Vec::<span class="hljs-title function_ invoke__">new</span>();
-    <span class="hljs-keyword">for</span> <span class="hljs-variable">_</span> <span class="hljs-keyword">in</span> <span class="hljs-number">0</span>..num_tasks {
-        tasks.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">10</span>)));
-    }
-    <span class="hljs-keyword">for</span> <span class="hljs-variable">task</span> <span class="hljs-keyword">in</span> tasks {
-        task.<span class="hljs-keyword">await</span>;
-    }
-}
-</code></pre>
-<p>Note that this won't work for <code>async_std</code> as it needs you to poll explicitly until the task being scheduled and executed, so switching to a loop will make it run the tasks sequentially.</p>
-<p>Let's see what will happen with the new test code.</p>
-<h3 id="minimum-footprint-1">Minimum Footprint</h3>
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-minimum-new">
-  </canvas>
-</div>
-<script>
-  const ctx1_new = document.getElementById('mem-minimum-new');
-
-  new Chart(ctx1_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [4968, 3228, 5384, 25008, 3924, 3644, 46304, 111464, 8552, 43320, 20536],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-<h3 id="10k-tasks-1">10K Tasks</h3>
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-10k-new">
-  </canvas>
-</div>
-<script>
-  const ctx2_new = document.getElementById('mem-10k-new');
-
-  new Chart(ctx2_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [8232, 3924, 5912, 29208, 10172, 32752, 111444, 198548, 27616, 66920, 34260],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-<h3 id="100k-tasks-1">100K Tasks</h3>
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-100k-new">
-  </canvas>
-</div>
-<script>
-  const ctx3_new = document.getElementById('mem-100k-new');
-
-  new Chart(ctx3_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [37192, 16800, 32128, 52112, 31728, 270708, 199032, 496812, 105312, 131588, 150264],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-<h3 id="1m-tasks">1M Tasks</h3>
-<div style="height:40vh; width:80vw">
-  <canvas id="mem-1m-new">
-  </canvas>
-</div>
-<script>
-  const ctx4_new = document.getElementById('mem-1m-new');
-
-  new Chart(ctx4_new, {
-    type: 'bar',
-    data: {
-      labels: ['Rust (tokio)', 'Rust (tokio-for)', 'Rust (async_std)', 'C#', 'C# (NativeAOT)', 'Go', 'Java (OpenJDK)', 'Java (GraalVM)', 'Java (GraalVM native-image)', 'NodeJS', 'Python'],
-      datasets: [{
-        label: 'Memory (KB)',
-        data: [326664, 123716, 302340, 223436, 203448, 2641592, 1117640, 1570300, 1070396, 584852, 1308136],
-        borderWidth: 1
-      }]
-    },
-    options: {
-        indexAxis: 'y',
-    }
-  });
-</script>
-<p>This shrinks the cost of <code>Rust (tokio)</code> by about a half, which makes Rust the absolute lead in this benchmark. Good job, Rust.</p>
+<p>Many things have changed since last year. With the benchmark results on the latest compilers and runtimes, we see a huge improvement in .NET, and .NET with NativeAOT is really competitive.</p>
+<p>Rust continues to be memory saving as expected, and achieved similar result with C# (NativeAOT).</p>
+<p>NodeJS shows impressive result in term of CPU usage.</p>
+<p>Python faced performance issue and was not able to complete the benchmark in time in the 1M case.</p>
+<p>Both Java Virtual Thread and Goroutine take similar approach on concurrency, while others are using async/await, so let's exclude other languages and only focus on these two: the native image of Java built with GraalVM did a great job in terms of memory efficiency, but it failed to finished the benchmark in 10 seconds in the 1M case; while Goroutine is able to complete all the tasks in time, but it costs much more RAM than Java in the 1M case.</p>
 
             
             <script async type="text/javascript">
