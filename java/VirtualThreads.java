@@ -6,7 +6,7 @@ public class VirtualThreads {
 
     public static void main(String[] args) throws InterruptedException {
 	int numTasks = Integer.parseInt(args[0]);
-        List<Thread> threads = new ArrayList<>();
+        List<Thread> threads = new ArrayList<>(numTasks);
 
         for (int i = 0; i < numTasks; i++) {
             Thread thread = Thread.startVirtualThread(() -> {
