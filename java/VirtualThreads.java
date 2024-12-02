@@ -11,7 +11,7 @@ public class VirtualThreads {
         for (int i = 0; i < numTasks; i++) {
             Thread thread = Thread.startVirtualThread(() -> {
                 try {
-                    Thread.sleep(Duration.ofSeconds(10));
+                    Thread.sleep(Duration.ofSeconds(10).toMillis());
                 } catch (InterruptedException e) {
                     // Handle exception
                 }
