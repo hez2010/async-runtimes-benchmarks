@@ -2,7 +2,19 @@
 
 ## A take 2 on this benchmark
 
-Please refer to [How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks? - Take 2](https://hez2010.github.io/async-runtimes-benchmarks-2024/take2.html) to see the latest result.
+**Please refer to [How Much Memory Do You Need in 2024 to Run 1 Million Concurrent Tasks? - Take 2](https://hez2010.github.io/async-runtimes-benchmarks-2024/take2.html) to check the latest result.**
+
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+
+----
 
 # Old post
 
