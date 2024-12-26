@@ -1,4 +1,5 @@
-use std::env;
+use std::alloc::{GlobalAlloc, Layout};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::{spawn, time::sleep, select};
 
@@ -6,30 +7,43 @@ use tokio::{spawn, time::sleep, select};
 // Implement proper error handling
 // Use tokio::select! for potential cancellation
 
+// More improvements:
+// Add more comprehensive memory tracking
+// Implement custom allocator tracing
+// Add detailed performance metrics
+
+// Custom allocator for memory tracking
+struct TracingAllocator<A: GlobalAlloc> {
+    allocator: A,
+    allocated: AtomicUsize,
+}
+
+
 #[derive(Debug)]
 struct TaskResult {
     task_id: usize,
     start_time: Instant,
     end_time: Instant,
     duration: Duration,
+    memory_allocated: usize,
 }
 
-async fn perform_task(task_id: usize) -> TaskResult {
+
+async fn perform_task(task_id: usize, allocator: &TracingAllocator<std::alloc::System>) -> TaskResult {
     let start_time = Instant::now();
+    let start_memory = allocator.allocated.load(Ordering::Relaxed);
     
-    // Simulate 10-second task with potential for cancellation
-    let sleep_future = sleep(Duration::from_secs(10));
+    sleep(Duration::from_secs(10)).await;
     
-    select! {
-        _ = sleep_future => {
-            let end_time = Instant::now();
-            TaskResult {
-                task_id,
-                start_time,
-                end_time,
-                duration: end_time.duration_since(start_time),
-            }
-        }
+    let end_time = Instant::now();
+    let end_memory = allocator.allocated.load(Ordering::Relaxed);
+
+    TaskResult {
+        task_id,
+        start_time,
+        end_time,
+        duration: end_time.duration_since(start_time),
+        memory_allocated: end_memory - start_memory,
     }
 }
 

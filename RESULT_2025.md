@@ -13,9 +13,9 @@ This benchmark aims to measure the memory footprint and performance characterist
 - Each task waits for 10 seconds
 - Program exits when all tasks complete
 
-### Improvements in 2025 Benchmark
+## Improvements in 2025 Benchmark
 
-#### Standardization Efforts
+### Standardization Efforts
 
 1. **Consistent Task Implementation**
    - Explicit task creation mechanism - 2024 previous implementations vary slightly in how they create and manage tasks. We should standardize.
@@ -73,6 +73,14 @@ This benchmark aims to measure the memory footprint and performance characterist
      - Optional result printing with task ID and duration
 
 ### Benchmarking Recommendations
+
+## Overarching Recommendations:
+
+- Standardize memory tracking across languages
+- Add detailed logging and tracing
+- Implement consistent performance metrics
+- Create a unified result collection and reporting mechanism
+- Add configuration for different benchmark scenarios
 
 1. **Consistent Environment**
    - Use identical hardware

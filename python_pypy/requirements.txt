@@ -1,0 +1,2 @@
+asyncio
+# No additional dependencies needed for PyPy

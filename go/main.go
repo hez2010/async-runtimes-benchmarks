@@ -4,38 +4,60 @@ package main
 // Add error tracking
 // Implement a more structured goroutine approach
 
+// More improvements:
+// Add runtime memory profiling
+// Implement more sophisticated context management
+// Add tracing capabilities
+
 import (
-	"context"
-	"fmt"
-	"os"
-	"strconv"
-	"sync"
-	"time"
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "runtime"
+    "runtime/trace"
+    "strconv"
+    "sync"
+    "time"
 )
 
+func getMemoryStats() uint64 {
+    var m runtime.MemStats
+    runtime.ReadMemStats(&m)
+    return m.Alloc
+}
 type TaskResult struct {
-	TaskID    int
-	StartTime time.Time
-	EndTime   time.Time
-	Duration  time.Duration
+    TaskID       int
+    StartMemory  uint64
+    EndMemory    uint64
+    StartTime    time.Time
+    EndTime      time.Time
+    Duration     time.Duration
 }
 
-func performTask(ctx context.Context, taskID int, results chan<- TaskResult, errChan chan<- error, wg *sync.WaitGroup) {
-	defer wg.Done()
 
-	startTime := time.Now()
-	select {
-	case <-time.After(10 * time.Second):
-		endTime := time.Now()
-		results <- TaskResult{
-			TaskID:    taskID,
-			StartTime: startTime,
-			EndTime:   endTime,
-			Duration:  endTime.Sub(startTime),
-		}
-	case <-ctx.Done():
-		errChan <- ctx.Err()
-	}
+func performTask(ctx context.Context, taskID int, results chan<- TaskResult, errChan chan<- error, wg *sync.WaitGroup) {
+    defer wg.Done()
+
+    startMemory := getMemoryStats()
+    startTime := time.Now()
+
+    select {
+    case <-time.After(10 * time.Second):
+        endTime := time.Now()
+        endMemory := getMemoryStats()
+
+        results <- TaskResult{
+            TaskID:      taskID,
+            StartMemory: startMemory,
+            EndMemory:   endMemory,
+            StartTime:   startTime,
+            EndTime:     endTime,
+            Duration:    endTime.Sub(startTime),
+        }
+    case <-ctx.Done():
+        errChan <- ctx.Err()
+    }
 }
 
 func main() {
